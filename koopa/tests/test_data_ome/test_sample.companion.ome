@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<OME xmlns="http://www.openmicroscopy.org/Schemas/OME/2016-06" 
+     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+     xsi:schemaLocation="http://www.openmicroscopy.org/Schemas/OME/2016-06 http://www.openmicroscopy.org/Schemas/OME/2016-06/ome.xsd">
+  <Image ID="Image:0" Name="test_sample">
+    <Pixels ID="Pixels:0" DimensionOrder="XYZCT" Type="uint16" 
+            SizeX="64" SizeY="64" SizeZ="3" SizeC="3" SizeT="1">
+      <Channel ID="Channel:0" Name="DAPI" />
+      <Channel ID="Channel:1" Name="GFP" />
+      <Channel ID="Channel:2" Name="mCherry" />
+      <TiffData PlaneCount="3">
+        <UUID FileName="test_sample_w1DAPI.ome.tif">urn:uuid:test-0</UUID>
+      </TiffData>
+      <TiffData PlaneCount="3">
+        <UUID FileName="test_sample_w2GFP.ome.tif">urn:uuid:test-1</UUID>
+      </TiffData>
+      <TiffData PlaneCount="3">
+        <UUID FileName="test_sample_w3mCherry.ome.tif">urn:uuid:test-2</UUID>
+      </TiffData>
+    </Pixels>
+  </Image>
+</OME>

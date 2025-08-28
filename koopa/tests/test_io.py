@@ -87,3 +87,25 @@ def test_save_image_recursive(tmp_path):
     image = np.zeros((10, 10))
     io.save_image(fname, image)
     assert os.path.isfile(fname)
+
+
+def test_load_ome_companion():
+    """Test loading companion OME file with associated OME-TIFF files."""
+    fname = "tests/test_data_ome/test_sample.companion.ome"
+    if os.path.exists(fname):
+        image = io.load_raw_image(fname, "companion.ome")
+        assert image.shape == (3, 3, 64, 64)
+        assert image.dtype == np.uint16
+    else:
+        pytest.skip("Test OME files not found")
+
+
+def test_load_ome_tif():
+    """Test loading individual OME-TIFF file."""
+    fname = "tests/test_data_ome/test_sample_w1DAPI.ome.tif"
+    if os.path.exists(fname):
+        image = io.load_raw_image(fname, "ome.tif")
+        assert image.shape == (1, 3, 64, 64)
+        assert image.dtype == np.uint16
+    else:
+        pytest.skip("Test OME-TIFF file not found")
