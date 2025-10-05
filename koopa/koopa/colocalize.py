@@ -14,15 +14,27 @@ def __colocalize_frames(
 
     Euclidean distance based linear sum assigment between coordinates in
             frame_one and frame_two. Removes all assignments above the distance_cutoff.
+
+    The distance cutoff is applied BEFORE assignment by masking the distance matrix.
+    This ensures consistent results regardless of the total number of spots being
+    analyzed, preventing the global optimization from assigning spots to suboptimal
+    matches that would later be filtered out.
     """
     cdist = scipy.spatial.distance.cdist(coords_one, coords_two, metric="euclidean")
-    rows, cols = scipy.optimize.linear_sum_assignment(cdist)
 
-    # Distance cutoff
-    for r, c in zip(rows, cols):
-        if cdist[r, c] > distance_cutoff:
-            rows = rows[rows != r]
-            cols = cols[cols != c]
+    # Apply distance cutoff BEFORE assignment by masking invalid distances
+    # Set distances above cutoff to a very large value to prevent assignment
+    cdist_masked = cdist.copy()
+    cdist_masked[cdist > distance_cutoff] = 1e10
+
+    # Run linear sum assignment on the masked distance matrix
+    rows, cols = scipy.optimize.linear_sum_assignment(cdist_masked)
+
+    # Filter out any assignments that were forced to use the masked value
+    # (i.e., remove assignments that originally exceeded the cutoff)
+    valid_mask = cdist[rows, cols] <= distance_cutoff
+    rows = rows[valid_mask]
+    cols = cols[valid_mask]
 
     return rows, cols
 
