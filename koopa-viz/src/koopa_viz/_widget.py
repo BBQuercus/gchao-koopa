@@ -212,6 +212,17 @@ class KoopaWidget(QWidget):
         self.do_timeseries = self.config.getboolean("General", "do_timeseries")
         self.do_3d = self.config.getboolean("General", "do_3d")
 
+        # Load channel names if available
+        if self.config.has_option("General", "channel_names"):
+            try:
+                self.channel_names = eval(
+                    self.config.get("General", "channel_names")
+                )
+            except Exception:
+                self.channel_names = []
+        else:
+            self.channel_names = []
+
     def load_file(self):
         """Open all associated files and enable editing."""
         self.name = self.dropdown_widget.currentText()
@@ -308,6 +319,50 @@ class KoopaWidget(QWidget):
             f"Found {len(self.files)} file{'s' if len(self.files) != 1 else ''}"
         )
 
+    def get_channel_colormap(
+        self, channel_idx: int, channel_name: str = None
+    ) -> str:
+        """Determine appropriate colormap for a channel based on name and config."""
+        # Try to get channel name from config if available
+        if (
+            channel_name is None
+            and hasattr(self, "channel_names")
+            and channel_idx < len(self.channel_names)
+        ):
+            channel_name = self.channel_names[channel_idx]
+
+        # Check config semantics to see if this channel is designated as nuclear or cyto
+        used_colors = set()
+        if hasattr(self, "config") and self.config:
+            try:
+                if self.config.has_option(
+                    "SegmentationCells", "channel_nuclei"
+                ):
+                    nuclear_channel = self.config.getint(
+                        "SegmentationCells", "channel_nuclei"
+                    )
+                    if channel_idx == nuclear_channel:
+                        return "blue"
+                    used_colors.add("blue")
+                if self.config.has_option("SegmentationCells", "channel_cyto"):
+                    cyto_channel = self.config.getint(
+                        "SegmentationCells", "channel_cyto"
+                    )
+                    if channel_idx == cyto_channel:
+                        return "yellow"
+                    used_colors.add("yellow")
+            except Exception:
+                pass
+
+        # Fallback to index-based color scheme, excluding already-used colors
+        all_colors = ["blue", "yellow", "green", "red", "gray", "cyan"]
+        available_colors = [c for c in all_colors if c not in used_colors]
+
+        if not available_colors:
+            available_colors = all_colors
+
+        return available_colors[channel_idx % len(available_colors)]
+
     def load_image(self):
         """Open and display raw image data."""
         if self.luigi:
@@ -328,8 +383,25 @@ class KoopaWidget(QWidget):
             fname = files[0]
         self.image = tifffile.imread(fname)
         for idx, channel in enumerate(self.image):
+            # Get channel name if available
+            channel_name = None
+            if hasattr(self, "channel_names") and idx < len(
+                self.channel_names
+            ):
+                channel_name = self.channel_names[idx]
+                layer_name = f"{channel_name} (C{idx})"
+            else:
+                layer_name = f"Channel {idx}"
+
+            # Get appropriate colormap
+            colormap = self.get_channel_colormap(idx, channel_name)
+
+            # Add image with colormap
             layer = self.viewer.add_image(
-                channel, name=f"Channel {idx}", **self.image_params
+                channel,
+                name=layer_name,
+                colormap=colormap,
+                **self.image_params,
             )
             self.current_file_layers.append(layer)
 
