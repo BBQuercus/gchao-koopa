@@ -1,5 +1,6 @@
 import configparser
 import glob
+import re
 import os
 
 from qtpy.QtWidgets import (
@@ -11,7 +12,9 @@ from qtpy.QtWidgets import (
     QPushButton,
     QVBoxLayout,
     QWidget,
+    QCheckBox,
 )
+from qtpy.QtCore import Qt
 import napari
 import numpy as np
 import pandas as pd
@@ -44,16 +47,20 @@ class KoopaWidget(QWidget):
 
         # Viewer model params - https://napari.org/stable/api/napari.Viewer
         self.image_params = dict(blending="additive")
-        self.label_params = dict(
-            blending="translucent", num_colors=50, opacity=0.7
-        )
+        self.label_params = dict(blending="translucent", opacity=0.7)
         self.point_params = dict(
-            edge_color="black",
             face_color="white",
             size=5,
             out_of_slice_display=True,
+            opacity=1.0,
+            border_width=1,
+            border_color="white",
         )
         self.track_params = dict(tail_width=8, tail_length=30, head_length=2)
+
+        # State tracking
+        self.auto_hide_previous = False
+        self.current_file_layers = []
 
         # Build plugin layout
         self.setLayout(QVBoxLayout())
@@ -111,6 +118,7 @@ class KoopaWidget(QWidget):
 
         btn_widget = QPushButton("Load")
         btn_widget.clicked.connect(self.load_file)
+        btn_widget.setToolTip("Load the selected file and all associated data")
         widget.layout().addWidget(btn_widget)
 
         self.file_dropdown = widget
@@ -122,11 +130,13 @@ class KoopaWidget(QWidget):
         widget = QWidget()
         widget.setLayout(QVBoxLayout())
         widget.layout().addWidget(QLabel("<b>Navigate Files:</b>"))
-        prev_widget = QPushButton("Previous Image")
+        prev_widget = QPushButton("Previous Image (←)")
         prev_widget.clicked.connect(lambda: self.change_file("prev"))
+        prev_widget.setToolTip("Navigate to previous file")
         widget.layout().addWidget(prev_widget)
-        next_widget = QPushButton("Next Image")
+        next_widget = QPushButton("Next Image (→)")
         next_widget.clicked.connect(lambda: self.change_file("next"))
+        next_widget.setToolTip("Navigate to next file")
         widget.layout().addWidget(next_widget)
 
         self.file_navigation = widget
@@ -139,9 +149,22 @@ class KoopaWidget(QWidget):
         widget.setLayout(QVBoxLayout())
         widget.layout().addWidget(QLabel("<b>Viewing Options:</b>"))
 
+        # Auto-hide checkbox
+        self.auto_hide_checkbox = QCheckBox("Auto-hide previous layers")
+        self.auto_hide_checkbox.setChecked(False)
+        self.auto_hide_checkbox.stateChanged.connect(self.toggle_auto_hide)
+        widget.layout().addWidget(self.auto_hide_checkbox)
+
         hideall_widget = QPushButton("Hide All Layers")
         hideall_widget.clicked.connect(self.hide_layers)
         widget.layout().addWidget(hideall_widget)
+
+        autocontrast_widget = QPushButton("Auto-Contrast Raw Images")
+        autocontrast_widget.clicked.connect(self.auto_contrast_raw_images)
+        autocontrast_widget.setToolTip(
+            "Apply automatic contrast adjustment to all raw image channels"
+        )
+        widget.layout().addWidget(autocontrast_widget)
 
         settings_save_widget = QPushButton("Save Settings")
         settings_save_widget.clicked.connect(self.save_settings)
@@ -153,14 +176,20 @@ class KoopaWidget(QWidget):
 
     def setup_progress_bar(self):
         """Prepare widget with data loading progress bar."""
+        widget = QWidget()
+        widget.setLayout(QVBoxLayout())
+        widget.layout().addWidget(QLabel("<b>Loading Status:</b>"))
         self.pbar = QProgressBar(self)
         self.pbar.setValue(0)
-        self.layout().addWidget(self.pbar)
+        widget.layout().addWidget(self.pbar)
+        self.status_label = QLabel("Ready")
+        widget.layout().addWidget(self.status_label)
+        self.layout().addWidget(widget)
 
     def open_file_dialog(self):
         """Dialog to select analysis directory."""
         dialog = QFileDialog()
-        dialog.setFileMode(QFileDialog.FileMode.DirectoryOnly)
+        dialog.setFileMode(QFileDialog.Directory)
         if dialog.exec_():
             self.clear_viewer()
             self.analysis_path = dialog.selectedFiles()[0]
@@ -180,8 +209,8 @@ class KoopaWidget(QWidget):
 
         self.config = configparser.ConfigParser()
         self.config.read(config_file)
-        self.do_timeseries = eval(self.config["General"]["do_timeseries"])
-        self.do_3d = eval(self.config["General"]["do_3d"])
+        self.do_timeseries = self.config.getboolean("General", "do_timeseries")
+        self.do_3d = self.config.getboolean("General", "do_3d")
 
     def load_file(self):
         """Open all associated files and enable editing."""
@@ -189,7 +218,17 @@ class KoopaWidget(QWidget):
 
         # Canvas reset
         self.pbar.setValue(0)
-        self.clear_viewer()
+        self.status_label.setText(f"Loading: {self.name}")
+
+        # Handle auto-hide if enabled
+        if self.auto_hide_checkbox.isChecked():
+            for layer in self.current_file_layers:
+                if layer in self.viewer.layers:
+                    layer.visible = False
+        else:
+            self.clear_viewer()
+
+        self.current_file_layers = []
         self.pbar.setValue(10)
 
         # Images
@@ -199,24 +238,35 @@ class KoopaWidget(QWidget):
         # Segmaps
         self.load_segmentation_cells()
         self.pbar.setValue(50)
-        if eval(self.config["SegmentationOther"]["sego_enabled"]):
+        if self.config.getboolean(
+            "SegmentationOther", "sego_enabled", fallback=False
+        ):
             self.load_segmentation_other()
         self.pbar.setValue(75)
 
         # Points
         self.load_detection_raw()
         self.pbar.setValue(85)
-        if eval(self.config["SpotsColocalization"]["coloc_enabled"]):
+        if self.config.getboolean(
+            "SpotsColocalization", "coloc_enabled", fallback=False
+        ):
             self.load_colocalization()
         self.pbar.setValue(100)
+        self.status_label.setText(f"Loaded: {self.name}")
 
     def change_file(self, option: str):
         """Navigation prev/next to change files faster."""
         file_idx = self.files.index(self.dropdown_widget.currentText())
         if file_idx == 0 and option == "prev":
-            raise ValueError("Already at the beginning!")
-        if file_idx == len(self.files) and option == "next":
-            raise ValueError("Already at the end!")
+            napari.utils.notifications.show_warning(
+                "Already at the first file!"
+            )
+            return
+        if file_idx == len(self.files) - 1 and option == "next":
+            napari.utils.notifications.show_warning(
+                "Already at the last file!"
+            )
+            return
 
         new_idx = file_idx + 1 if option == "next" else file_idx - 1
         self.dropdown_widget.setCurrentText(self.files[new_idx])
@@ -229,16 +279,34 @@ class KoopaWidget(QWidget):
                 os.path.join(self.analysis_path, "preprocessed", "*.tif")
             )
         )
-        self.files = sorted(
-            [os.path.basename(f).replace(".tif", "") for f in files]
-        )
+
+        if not files:
+            napari.utils.notifications.show_error(
+                "No preprocessed files found in the selected directory!"
+            )
+            return
+
+        # Remove extensions
+        files_clean = [os.path.basename(f).replace(".tif", "") for f in files]
+
         if not self.luigi:
-            self.files = sorted([f[17:] for f in self.files])
+            # Extract only the portion before the last hyphen or before `AxxZxxCxx` if that's present
+            cleaned = []
+            for name in files_clean:
+                match = re.match(r"(.+?)(?:-[A]\d{2}Z\d{2}C\d{2})?$", name)
+                if match:
+                    cleaned.append(match.group(1))
+            self.files = sorted(set(cleaned))
+        else:
+            self.files = sorted(set(files_clean))
 
         self.file_dropdown.setDisabled(False)
         self.file_navigation.setDisabled(False)
         self.dropdown_widget.clear()
         self.dropdown_widget.addItems(self.files)
+        napari.utils.notifications.show_info(
+            f"Found {len(self.files)} file{'s' if len(self.files) != 1 else ''}"
+        )
 
     def load_image(self):
         """Open and display raw image data."""
@@ -247,16 +315,23 @@ class KoopaWidget(QWidget):
                 self.analysis_path, "preprocessed", f"{self.name}.tif"
             )
         else:
-            fname = glob.glob(
+            files = glob.glob(
                 os.path.join(
-                    self.analysis_path, "preprocessed", f"{self.name}-*.tif"
+                    self.analysis_path, "preprocessed", f"{self.name}*.tif"
                 )
-            )[0]
+            )
+            if not files:
+                napari.utils.notifications.show_error(
+                    f"No file found for {self.name}"
+                )
+                return
+            fname = files[0]
         self.image = tifffile.imread(fname)
         for idx, channel in enumerate(self.image):
-            self.viewer.add_image(
+            layer = self.viewer.add_image(
                 channel, name=f"Channel {idx}", **self.image_params
             )
+            self.current_file_layers.append(layer)
 
     def load_segmentation_cells(self):
         """Open and display nuclear/cytoplasmic segmentation maps."""
@@ -268,25 +343,32 @@ class KoopaWidget(QWidget):
                     f"{self.name}.tif",
                 )
             else:
-                fname = glob.glob(
+                files = glob.glob(
                     os.path.join(
                         self.analysis_path,
                         f"segmentation_{name}",
-                        f"{self.name}-*.tif",
+                        f"{self.name}*.tif",
                     )
-                )[0]
+                )
+                if not files:
+                    continue
+                fname = files[0]
             if not os.path.exists(fname):
                 continue
             segmap = tifffile.imread(fname).astype(int)
-            self.viewer.add_labels(
+            layer = self.viewer.add_labels(
                 segmap,
                 name=f"Segmentation {name.capitalize()}",
                 **self.label_params,
             )
+            self.current_file_layers.append(layer)
 
     def load_segmentation_other(self):
         """Open and display additional segmentation maps."""
-        for channel in eval(self.config["SegmentationOther"]["sego_channels"]):
+        channels_str = self.config.get(
+            "SegmentationOther", "sego_channels", fallback="[]"
+        )
+        for channel in eval(channels_str):
             if self.luigi:
                 fname = os.path.join(
                     self.analysis_path,
@@ -294,22 +376,32 @@ class KoopaWidget(QWidget):
                     f"{self.name}.tif",
                 )
             else:
-                fname = glob.glob(
+                files = glob.glob(
                     os.path.join(
                         self.analysis_path,
                         f"segmentation_{channel}",
-                        f"{self.name}-*.tif",
+                        f"{self.name}*.tif",
                     )
-                )[0]
+                )
+                if not files:
+                    napari.utils.notifications.show_warning(
+                        f"No segmentation file for channel {channel}"
+                    )
+                    continue
+                fname = files[0]
             segmap = tifffile.imread(fname).astype(int)
-            self.viewer.add_labels(
+            layer = self.viewer.add_labels(
                 segmap, name=f"Segmentation C{channel}", **self.label_params
             )
+            self.current_file_layers.append(layer)
 
     def load_detection_raw(self):
         """Open and display raw spot detection points."""
 
-        for channel in eval(self.config["SpotsDetection"]["detect_channels"]):
+        channels_str = self.config.get(
+            "SpotsDetection", "detect_channels", fallback="[]"
+        )
+        for channel in eval(channels_str):
             folder = (
                 f"detection_final_c{channel}"
                 if self.do_3d or self.do_timeseries
@@ -320,30 +412,40 @@ class KoopaWidget(QWidget):
                     self.analysis_path, folder, f"{self.name}.parq"
                 )
             else:
-                fname = glob.glob(
+                files = glob.glob(
                     os.path.join(
-                        self.analysis_path, folder, f"{self.name}-*.parq"
+                        self.analysis_path, folder, f"{self.name}*.parq"
                     )
-                )[0]
+                )
+                if not files:
+                    napari.utils.notifications.show_warning(
+                        f"No detection file in {folder}"
+                    )
+                    continue
+                fname = files[0]
             df = pd.read_parquet(fname)
 
             if self.do_timeseries:
-                self.viewer.add_tracks(
+                layer = self.viewer.add_tracks(
                     df[self.track_cols],
                     name=f"Track C{channel}",
                     **self.track_params,
                 )
             else:
-                self.viewer.add_points(
+                layer = self.viewer.add_points(
                     df[self.spots_cols],
                     name=f"Detection C{channel}",
                     **self.point_params,
                 )
+            self.current_file_layers.append(layer)
 
     def load_colocalization(self):
         """Open and display colocalization pairs (colocalized vs. non)."""
 
-        for i, j in eval(self.config["SpotsColocalization"]["coloc_channels"]):
+        channels_str = self.config.get(
+            "SpotsColocalization", "coloc_channels", fallback="[]"
+        )
+        for i, j in eval(channels_str):
             if self.luigi:
                 fname = os.path.join(
                     self.analysis_path,
@@ -351,13 +453,19 @@ class KoopaWidget(QWidget):
                     f"{self.name}.parq",
                 )
             else:
-                fname = glob.glob(
+                files = glob.glob(
                     os.path.join(
                         self.analysis_path,
                         f"colocalization_{i}-{j}",
-                        f"{self.name}-*.parq",
+                        f"{self.name}*.parq",
                     )
-                )[0]
+                )
+                if not files:
+                    napari.utils.notifications.show_warning(
+                        f"No colocalization file for {i}-{j}"
+                    )
+                    continue
+                fname = files[0]
             df = pd.read_parquet(fname)
             df_coloc = df[df["channel"] == i]
             df_empty = df[df["channel"] == j]
@@ -390,24 +498,58 @@ class KoopaWidget(QWidget):
                     df_empty[f"coloc_particle_{i}-{j}"] == 0, self.spots_cols
                 ]
                 bland_point_params = self.point_params.copy()
-                bland_point_params.pop("face_color")
+                bland_point_params.pop("face_color", None)
+                bland_point_params.pop("border_color", None)
                 self.viewer.add_points(
                     df_coloc,
                     name=f"Detection {i}-{j} Coloc",
                     face_color="red",
+                    border_color="red",
                     **bland_point_params,
                 )
                 self.viewer.add_points(
                     df_empty,
                     name=f"Detection {i}-{j} Empty",
                     face_color="blue",
+                    border_color="blue",
                     **bland_point_params,
                 )
+
+    def toggle_auto_hide(self, state):
+        """Toggle auto-hide mode for layers."""
+        self.auto_hide_previous = state == Qt.Checked
+        napari.utils.notifications.show_info(
+            f"Auto-hide mode {'enabled' if self.auto_hide_previous else 'disabled'}"
+        )
 
     def hide_layers(self):
         """Set visibility of all layers to False."""
         for layer in self.viewer.layers:
             layer.visible = False
+
+    def auto_contrast_raw_images(self):
+        """Apply automatic contrast adjustment to raw image channels."""
+        adjusted_count = 0
+        for layer in self.viewer.layers:
+            # Only adjust Image layers, and preferably ones that look like raw channels
+            if layer.__class__.__name__ == "Image":
+                # Check if it's a raw channel (contains "Channel" or "(C" in name)
+                if "Channel" in layer.name or "(C" in layer.name:
+                    # Calculate percentile-based contrast limits
+                    data = layer.data
+                    p5 = np.percentile(data, 5)
+                    p95 = np.percentile(data, 95)
+                    layer.contrast_limits = [p5, p95]
+                    adjusted_count += 1
+
+        if adjusted_count > 0:
+            napari.utils.notifications.show_info(
+                f"Auto-contrast applied to {adjusted_count} raw image channel{'s' if adjusted_count != 1 else ''}"
+            )
+        else:
+            napari.utils.notifications.show_warning(
+                "No raw image channels found to adjust"
+            )
 
     @staticmethod
     def rgb_to_hex(rgb: np.ndarray):
