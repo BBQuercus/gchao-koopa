@@ -57,21 +57,31 @@ def segment_cellpose(
     gpu: bool = False,
 ) -> np.ndarray:
     """Segment a file using cellpose into nuclear maps."""
-    cellpose_model = models.CellposeModel(
-        model_type=model, gpu=gpu, pretrained_model=pretrained
-    )
+    # Cellpose 4.x API: CellposeModel with pretrained_model
+    # Default is 'cpsam' (unified model), or provide custom model path
+    if pretrained:
+        # Custom pretrained model(s)
+        pretrained_model = pretrained[0] if len(pretrained) == 1 else pretrained
+    else:
+        # Use default cpsam model (cellpose 4.x unified model)
+        pretrained_model = "cpsam"
+
+    cellpose_model = models.CellposeModel(gpu=gpu, pretrained_model=pretrained_model)
 
     if do_3d:
         image = np.array([(i - np.mean(i)) / np.std(i) for i in image])
 
-    segmap, *_ = cellpose_model.eval(
-        [image],
-        channels=[0, 0],
-        diameter=diameter,
-        do_3D=do_3d,
-        min_size=min_size_nuclei,
-        resample=resample,
-    )
+    # Cellpose 4.x: channels is deprecated, use z_axis for 3D
+    eval_kwargs = {
+        "diameter": diameter,
+        "min_size": min_size_nuclei,
+        "resample": resample,
+    }
+    if do_3d:
+        eval_kwargs["do_3D"] = True
+        eval_kwargs["z_axis"] = 0  # Z is first axis
+
+    segmap, *_ = cellpose_model.eval([image], **eval_kwargs)
     segmap = segmap[0]
     return segmap
 
