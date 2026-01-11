@@ -235,14 +235,6 @@ segmentation_cells = {
         default=150,
         dtype=int,
     ),
-    "cellpose_resample": ConfigItem(
-        description=(
-            "If segmap should be resampled (slower, more accurate). "
-            "Only if method is cellpose."
-        ),
-        default=True,
-        dtype=bool,
-    ),
     # Mathematical options
     "gaussian": ConfigItem(
         description=(

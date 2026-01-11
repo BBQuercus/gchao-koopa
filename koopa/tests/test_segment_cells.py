@@ -24,7 +24,6 @@ def test_segment_cellpose(segmap):
         pretrained=[],
         do_3d=False,
         diameter=30,
-        resample=False,
         min_size_nuclei=10,
     )
     assert len(np.unique(output)) == 3

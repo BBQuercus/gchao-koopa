@@ -52,7 +52,6 @@ def segment_cellpose(
     pretrained: List[str],
     do_3d: bool,
     diameter: int,
-    resample: bool,
     min_size_nuclei: int,
     gpu: bool = False,
 ) -> np.ndarray:
@@ -75,7 +74,7 @@ def segment_cellpose(
     eval_kwargs = {
         "diameter": diameter,
         "min_size": min_size_nuclei,
-        "resample": resample,
+        "resample": True,  # Always resample to match input dimensions
     }
     if do_3d:
         eval_kwargs["do_3D"] = True
@@ -130,7 +129,6 @@ def segment_nuclei(image: np.ndarray, config: dict) -> np.ndarray:
             pretrained=config["cellpose_models"],
             do_3d=config["do_3d"],
             diameter=config["cellpose_diameter"],
-            resample=config["cellpose_resample"],
             min_size_nuclei=config["min_size_nuclei"],
             gpu=config["gpu"],
         )
@@ -151,7 +149,6 @@ def segment_cyto(image: np.ndarray, config: dict) -> np.ndarray:
         pretrained=config["cellpose_models"],
         do_3d=config["do_3d"],
         diameter=config["cellpose_diameter"],
-        resample=config["cellpose_resample"],
         min_size_nuclei=config["min_size_nuclei"],
         gpu=config["gpu"],
     )

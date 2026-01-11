@@ -18,7 +18,6 @@ def segment_cellpose(
     model: Literal["nuclei", "cyto"],
     do_3d: bool = False,
     cellpose_diameter: int = 150,
-    cellpose_resample: bool = True,
     cellpose_min_size: int = 1000,
     gpu: bool = False,
 ) -> np.ndarray:
@@ -34,7 +33,7 @@ def segment_cellpose(
         diameter=cellpose_diameter,
         do_3D=do_3d,
         min_size=cellpose_min_size,
-        resample=cellpose_resample,
+        resample=True,
     )
     segmap = segmap[0]
     return segmap
