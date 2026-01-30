@@ -10,7 +10,7 @@ from setuptools import setup
 setup(
     # Description
     name="koopa",
-    version="0.0.17",
+    version="0.0.18",
     license="MIT",
     description="Workflow for analysis of cellular microscopy data.",
     long_description_content_type="text/plain",
