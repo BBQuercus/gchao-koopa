@@ -23,13 +23,30 @@ def get_sharpest_slice(image: np.ndarray, axis: int = 0) -> np.ndarray:
 
 
 def register_3d_image(
-    image: np.ndarray, method: Literal["maximum", "mean", "sharpest"]
+    image: np.ndarray,
+    method: Literal["maximum", "mean", "sharpest"],
+    z_start: int = 0,
+    z_end: int = 0,
 ) -> np.ndarray:
-    """Intensity projection to convert 3D+C image to 2D."""
+    """Intensity projection to convert 3D+C image to 2D.
+
+    Args:
+        image: 4D image array (CZYX).
+        method: Projection method.
+        z_start: First z-slice to include (0-indexed). 0 = start from first slice.
+        z_end: Last z-slice to include (exclusive). 0 = include all slices.
+    """
     if image.ndim != 4:
         raise ValueError("Image must be 4D.")
 
     z_axis = image.shape.index(sorted(image.shape)[1])
+
+    # Apply z-range selection before projection
+    if z_start > 0 or z_end > 0:
+        z_size = image.shape[z_axis]
+        end = z_end if z_end > 0 else z_size
+        indices = list(range(z_start, end))
+        image = np.take(image, indices, axis=z_axis)
 
     if method == "maximum":
         return image.max(axis=z_axis)

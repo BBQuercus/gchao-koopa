@@ -84,6 +84,16 @@ preprocessing_normalization = {
         default="maximum",
         dtype=str,
     ),
+    "z_start": ConfigItem(
+        description="First z-slice to include in projection (0-indexed). 0 = start from first slice.",
+        default=0,
+        dtype=int,
+    ),
+    "z_end": ConfigItem(
+        description="Last z-slice to include in projection (exclusive). 0 = include all slices.",
+        default=0,
+        dtype=int,
+    ),
     "frame_start": ConfigItem(
         description="Frame to start analysis. Only if do_3d or do_timeseries is True.",
         default=0,
@@ -537,11 +547,21 @@ def add_versioning(config: configparser.ConfigParser) -> configparser.ConfigPars
 
 
 def flatten_config(config: configparser.ConfigParser) -> dict:
-    """Convert sectioned configuration to flat dictionary."""
+    """Convert sectioned configuration to flat dictionary.
+
+    Starts with defaults from CONFIGS, then overrides with values from the
+    config file. This ensures backwards compatibility when new config options
+    are added - old config files will use the defaults for missing options.
+    """
+    # Start with defaults from CONFIGS
     flat_config = {}
+    for section_name, section_items in CONFIGS.items():
+        for key, item in section_items.items():
+            flat_config[key] = item.default
+
+    # Override with values from the config file
     for section in config.sections():
         for key in config[section]:
-            # TODO proper type casting
             try:
                 flat_config[key] = eval(config[section][key])
             except (NameError, SyntaxError):

@@ -77,3 +77,32 @@ def test_flatten_config(cfg):
     assert isinstance(output, dict)
     assert isinstance(output["do_3d"], bool)
     assert isinstance(output["cellpose_diameter"], int)
+
+
+def test_flatten_config_includes_defaults_for_missing_options(cfg):
+    """Config options not in file should get their defaults from CONFIGS."""
+    # Remove z_start/z_end if present (simulating old config file)
+    if "z_start" in cfg["PreprocessingNormalization"]:
+        del cfg["PreprocessingNormalization"]["z_start"]
+    if "z_end" in cfg["PreprocessingNormalization"]:
+        del cfg["PreprocessingNormalization"]["z_end"]
+
+    output = config.flatten_config(cfg)
+
+    # Should still have z_start/z_end with default values
+    assert "z_start" in output
+    assert "z_end" in output
+    assert output["z_start"] == 0  # default from CONFIGS
+    assert output["z_end"] == 0  # default from CONFIGS
+
+
+def test_flatten_config_file_values_override_defaults(cfg):
+    """Config file values should override CONFIGS defaults."""
+    # Set explicit values in config
+    cfg["PreprocessingNormalization"]["z_start"] = "5"
+    cfg["PreprocessingNormalization"]["z_end"] = "15"
+
+    output = config.flatten_config(cfg)
+
+    assert output["z_start"] == 5
+    assert output["z_end"] == 15
