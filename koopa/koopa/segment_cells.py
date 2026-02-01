@@ -85,12 +85,26 @@ def segment_cellpose(
     return segmap
 
 
-def remove_border_objects(image: np.ndarray) -> np.ndarray:
-    """Remove objects touching the border of the image."""
-    shape = {0, *image.shape}
-    for prop in skimage.measure.regionprops(image):
-        if bool(shape & {*prop.bbox}):
-            image = np.where(image == prop.label, 0, image)
+def remove_border_objects(image: np.ndarray, do_3d: bool = False) -> np.ndarray:
+    """Remove objects touching the border of the image.
+
+    For 3D images, only removes objects touching XY borders (not Z borders),
+    since cells typically span the entire z-stack.
+    """
+    if do_3d and image.ndim == 3:
+        # Only check XY borders for 3D images
+        # bbox is (min_z, min_y, min_x, max_z, max_y, max_x)
+        border_values = {0, image.shape[1], image.shape[2]}
+        for prop in skimage.measure.regionprops(image):
+            # Check only y and x coordinates (indices 1,2,4,5 of bbox)
+            bbox_xy = {prop.bbox[1], prop.bbox[2], prop.bbox[4], prop.bbox[5]}
+            if bool(border_values & bbox_xy):
+                image = np.where(image == prop.label, 0, image)
+    else:
+        shape = {0, *image.shape}
+        for prop in skimage.measure.regionprops(image):
+            if bool(shape & {*prop.bbox}):
+                image = np.where(image == prop.label, 0, image)
     return image
 
 
@@ -175,7 +189,7 @@ def segment_both(
 
     # Remove objects and keep nuclei/cyto pairing in order
     if config["remove_border"]:
-        segmap_cyto = remove_border_objects(segmap_cyto)
+        segmap_cyto = remove_border_objects(segmap_cyto, do_3d=config["do_3d"])
         nuclei_to_keep = set(np.unique(segmap_nuclei)).intersection(
             set(np.unique(segmap_cyto))
         )
