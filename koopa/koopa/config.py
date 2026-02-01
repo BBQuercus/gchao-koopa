@@ -195,7 +195,7 @@ spots_colocalization = {
     "distance_cutoff": ConfigItem(
         description="Maximum distance for colocalization.",
         default=5,
-        dtype=int,
+        dtype=float,
     ),
     "min_frames": ConfigItem(
         description="Minimum number of frames for colocalization.",

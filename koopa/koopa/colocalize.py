@@ -44,7 +44,7 @@ def __colocalize_tracks(
     track_two: pd.DataFrame,
     name: str,
     min_frames: int,
-    distance_cutoff: int,
+    distance_cutoff: float,
 ) -> Tuple[np.ndarray, np.ndarray]:
     """Full track colocalization between track_one, track_two.
 
@@ -91,7 +91,7 @@ def colocalize_frames(
     df_two: pd.DataFrame,
     name: str,
     z_distance: float,
-    distance_cutoff: int,
+    distance_cutoff: float,
 ) -> pd.DataFrame:
     """Wrapper to colocalize two frame-dataframes."""
     coords_one = df_one[["y", "x", "frame"]].to_numpy()
@@ -118,7 +118,7 @@ def colocalize_tracks(
     df_two: pd.DataFrame,
     name: str,
     min_frames: int,
-    distance_cutoff: int,
+    distance_cutoff: float,
 ) -> pd.DataFrame:
     """Wrapper to colocalize two track-dataframes."""
     # Colocalize both channels
