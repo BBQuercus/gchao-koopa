@@ -26,7 +26,7 @@ def df_one(coords_one):
         {
             "x": [*coords_one.T[0]] * 3,
             "y": [*coords_one.T[1]] * 3,
-            "particle": list(range(3)) * 3,
+            "particle_test": list(range(3)) * 3,
             "frame": [1, 1, 1, 2, 2, 2, 3, 3, 3],
         }
     )
@@ -38,7 +38,7 @@ def df_two(coords_two):
         {
             "x": [*coords_two.T[0]] * 3,
             "y": [*coords_two.T[1]] * 3,
-            "particle": list(range(3)) * 3,
+            "particle_test": list(range(3)) * 3,
             "frame": [1, 1, 1, 2, 2, 2, 3, 3, 3],
         }
     )
@@ -73,7 +73,7 @@ def test_colocalize_frames_not_matching(coords_one, coords_three, distance, leng
     "min_frames, distance, length", [(0, 0, 3), (1, 1, 3), (2, 2, 3), (3, 0, 0)]
 )
 def test_colocalize_tracks_identical(df_one, min_frames, distance, length):
-    rows, cols = colocalize.__colocalize_tracks(df_one, df_one, min_frames, distance)
+    rows, cols = colocalize.__colocalize_tracks(df_one, df_one, "test", min_frames, distance)
     assert len(rows) == len(cols) == length
     if length == 3:
         assert (rows == [0, 1, 2]).all()
@@ -83,7 +83,7 @@ def test_colocalize_tracks_identical(df_one, min_frames, distance, length):
     "min_frames, distance, length", [(1, 0, 0), (0, 1, 2), (2, 2, 3)]
 )
 def test_colocalize_tracks_matching(df_one, df_two, min_frames, distance, length):
-    rows, cols = colocalize.__colocalize_tracks(df_one, df_two, min_frames, distance)
+    rows, cols = colocalize.__colocalize_tracks(df_one, df_two, "test", min_frames, distance)
     assert len(rows) == len(cols) == length
 
 
@@ -106,15 +106,15 @@ def test_colocalize_dff_matching(df_one, df_two):
 
 
 def test_colocalize_dft_identical(df_one):
-    output = colocalize.colocalize_tracks(df_one, df_one, 1, 1)
-    assert all(output["particle"] == output["coloc_particle"])
+    output = colocalize.colocalize_tracks(df_one, df_one, "test", 1, 1)
+    assert all(output["particle_test"] == output["coloc_particle_test"])
 
 
 def test_colocalize_dft_matching(df_one, df_two):
-    output = colocalize.colocalize_tracks(df_one, df_two, 1, 1)
-    assert output["coloc_particle"].isna().sum() == 6
+    output = colocalize.colocalize_tracks(df_one, df_two, "test", 1, 1)
+    assert output["coloc_particle_test"].isna().sum() == 6
 
 
 def test_colocalize_dft_output_present(df_one, df_two):
-    output = colocalize.colocalize_tracks(df_one, df_two, 5, 1)
-    assert "coloc_particle" in output.columns
+    output = colocalize.colocalize_tracks(df_one, df_two, "test", 5, 1)
+    assert "coloc_particle_test" in output.columns

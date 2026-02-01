@@ -71,8 +71,8 @@ def __colocalize_tracks(
         rows, cols = __colocalize_frames(coords_one, coords_two, distance_cutoff)
 
         # Assign "real" track-particle number
-        real_rows = np.array([frame_one.particle[i] for i in rows])
-        real_cols = np.array([frame_two.particle[i] for i in cols])
+        real_rows = np.array([frame_one[f"particle_{name}"].iloc[i] for i in rows])
+        real_cols = np.array([frame_two[f"particle_{name}"].iloc[i] for i in cols])
 
         # Update assignment matrix, IndexError if none colocalizing / empty
         try:
