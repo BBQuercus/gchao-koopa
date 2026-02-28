@@ -19,8 +19,10 @@ def preprocess(image: np.ndarray) -> np.ndarray:
 
 def relabel_array(image: np.ndarray, mapping: dict) -> np.ndarray:
     """Label an image array based on a input->output map."""
-    new_image = [np.where(image == key, value, 0) for key, value in mapping.items()]
-    return np.max(new_image, axis=0)
+    result = np.zeros_like(image)
+    for old_label, new_label in mapping.items():
+        result[image == old_label] = new_label
+    return result
 
 
 def segment_otsu(
@@ -103,6 +105,7 @@ def remove_border_objects(image: np.ndarray, do_3d: bool = False) -> np.ndarray:
     For 3D images, only removes objects touching XY borders (not Z borders),
     since cells typically span the entire z-stack.
     """
+    image = image.copy()
     if do_3d and image.ndim == 3:
         # Only check XY borders for 3D images
         # bbox is (min_z, min_y, min_x, max_z, max_y, max_x)
@@ -111,12 +114,12 @@ def remove_border_objects(image: np.ndarray, do_3d: bool = False) -> np.ndarray:
             # Check only y and x coordinates (indices 1,2,4,5 of bbox)
             bbox_xy = {prop.bbox[1], prop.bbox[2], prop.bbox[4], prop.bbox[5]}
             if bool(border_values & bbox_xy):
-                image = np.where(image == prop.label, 0, image)
+                image[image == prop.label] = 0
     else:
         shape = {0, *image.shape}
         for prop in skimage.measure.regionprops(image):
             if bool(shape & {*prop.bbox}):
-                image = np.where(image == prop.label, 0, image)
+                image[image == prop.label] = 0
     return image
 
 
