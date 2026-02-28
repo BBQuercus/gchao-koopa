@@ -245,6 +245,40 @@ segmentation_cells = {
         default=150,
         dtype=int,
     ),
+    "cellprob_threshold": ConfigItem(
+        description=(
+            "Cellpose cell probability threshold (-6 to 6). "
+            "Higher values produce tighter masks by excluding low-confidence pixels. "
+            "Only if method is cellpose."
+        ),
+        default=0.0,
+        dtype=float,
+    ),
+    "flow_threshold": ConfigItem(
+        description=(
+            "Cellpose flow error threshold. "
+            "Lower values reject ill-shaped masks. "
+            "Only if method is cellpose."
+        ),
+        default=0.4,
+        dtype=float,
+    ),
+    "cellpose_clip_lower": ConfigItem(
+        description=(
+            "Lower percentile (0-1) for intensity clipping before cellpose. "
+            "Only if method is cellpose."
+        ),
+        default=0.0,
+        dtype=float,
+    ),
+    "cellpose_clip_upper": ConfigItem(
+        description=(
+            "Upper percentile (0-1) for intensity clipping before cellpose. "
+            "1.0 = no clipping. Only if method is cellpose."
+        ),
+        default=1.0,
+        dtype=float,
+    ),
     # Mathematical options
     "gaussian": ConfigItem(
         description=(
@@ -555,7 +589,7 @@ def flatten_config(config: configparser.ConfigParser) -> dict:
     """
     # Start with defaults from CONFIGS
     flat_config = {}
-    for section_name, section_items in CONFIGS.items():
+    for section_items in CONFIGS.values():
         for key, item in section_items.items():
             flat_config[key] = item.default
 

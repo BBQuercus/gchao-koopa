@@ -54,6 +54,10 @@ def segment_cellpose(
     diameter: int,
     min_size_nuclei: int,
     gpu: bool = False,
+    cellprob_threshold: float = 0.0,
+    flow_threshold: float = 0.4,
+    clip_lower: float = 0.0,
+    clip_upper: float = 1.0,
 ) -> np.ndarray:
     """Segment a file using cellpose into nuclear maps."""
     # Cellpose 4.x API: CellposeModel with pretrained_model
@@ -67,6 +71,12 @@ def segment_cellpose(
 
     cellpose_model = models.CellposeModel(gpu=gpu, pretrained_model=pretrained_model)
 
+    # Pre-segmentation intensity clipping
+    if clip_lower > 0.0 or clip_upper < 1.0:
+        lower = np.percentile(image, clip_lower * 100)
+        upper = np.percentile(image, clip_upper * 100)
+        image = np.clip(image, lower, upper)
+
     if do_3d:
         image = np.array([(i - np.mean(i)) / np.std(i) for i in image])
 
@@ -75,6 +85,8 @@ def segment_cellpose(
         "diameter": diameter,
         "min_size": min_size_nuclei,
         "resample": True,  # Always resample to match input dimensions
+        "cellprob_threshold": cellprob_threshold,
+        "flow_threshold": flow_threshold,
     }
     if do_3d:
         eval_kwargs["do_3D"] = True
@@ -145,6 +157,10 @@ def segment_nuclei(image: np.ndarray, config: dict) -> np.ndarray:
             diameter=config["cellpose_diameter"],
             min_size_nuclei=config["min_size_nuclei"],
             gpu=config["gpu"],
+            cellprob_threshold=config["cellprob_threshold"],
+            flow_threshold=config["flow_threshold"],
+            clip_lower=config["cellpose_clip_lower"],
+            clip_upper=config["cellpose_clip_upper"],
         )
     if method == "otsu":
         return segment_otsu(
@@ -165,6 +181,10 @@ def segment_cyto(image: np.ndarray, config: dict) -> np.ndarray:
         diameter=config["cellpose_diameter"],
         min_size_nuclei=config["min_size_nuclei"],
         gpu=config["gpu"],
+        cellprob_threshold=config["cellprob_threshold"],
+        flow_threshold=config["flow_threshold"],
+        clip_lower=config["cellpose_clip_lower"],
+        clip_upper=config["cellpose_clip_upper"],
     )
 
 
