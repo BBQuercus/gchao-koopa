@@ -7,7 +7,7 @@ import datetime
 import os
 import textwrap
 
-__version__ = "0.0.18"
+__version__ = "0.0.22"
 
 
 @dataclass
