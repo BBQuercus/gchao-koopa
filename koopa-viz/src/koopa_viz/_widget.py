@@ -440,32 +440,60 @@ class KoopaWidget(QWidget):
         channels_str = self.config.get(
             "SegmentationOther", "sego_channels", fallback="[]"
         )
-        for channel in eval(channels_str):
-            if self.luigi:
-                fname = os.path.join(
-                    self.analysis_path,
-                    f"segmentation_{channel}",
-                    f"{self.name}.tif",
+        dilations_str = self.config.get(
+            "SegmentationOther", "sego_dilations", fallback="[]"
+        )
+        try:
+            dilations_per_channel = eval(dilations_str) or []
+        except (SyntaxError, NameError):
+            dilations_per_channel = []
+
+        for idx, channel in enumerate(eval(channels_str)):
+            self._load_segmentation_other_layer(channel, suffix="", label=None)
+
+            radii = (
+                dilations_per_channel[idx]
+                if idx < len(dilations_per_channel)
+                else []
+            )
+            for r in radii:
+                if r == 0:
+                    continue
+                self._load_segmentation_other_layer(
+                    channel,
+                    suffix=f"_d{r}",
+                    label=f"Segmentation C{channel} d{r}",
                 )
-            else:
-                files = glob.glob(
-                    os.path.join(
-                        self.analysis_path,
-                        f"segmentation_{channel}",
-                        f"{self.name}*.tif",
-                    )
-                )
-                if not files:
+
+    def _load_segmentation_other_layer(self, channel, suffix: str, label):
+        """Load a single segmentation_c{channel}{suffix} layer into napari."""
+        folder = f"segmentation_c{channel}{suffix}"
+        if self.luigi:
+            fname = os.path.join(self.analysis_path, folder, f"{self.name}.tif")
+        else:
+            files = glob.glob(
+                os.path.join(self.analysis_path, folder, f"{self.name}*.tif")
+            )
+            if not files:
+                if not suffix:
                     napari.utils.notifications.show_warning(
                         f"No segmentation file for channel {channel}"
                     )
-                    continue
-                fname = files[0]
-            segmap = tifffile.imread(fname).astype(int)
-            layer = self.viewer.add_labels(
-                segmap, name=f"Segmentation C{channel}", **self.label_params
-            )
-            self.current_file_layers.append(layer)
+                return
+            fname = files[0]
+        if not os.path.isfile(fname):
+            if not suffix:
+                napari.utils.notifications.show_warning(
+                    f"No segmentation file for channel {channel}"
+                )
+            return
+        segmap = tifffile.imread(fname).astype(int)
+        layer = self.viewer.add_labels(
+            segmap,
+            name=label or f"Segmentation C{channel}",
+            **self.label_params,
+        )
+        self.current_file_layers.append(layer)
 
     def load_detection_raw(self):
         """Open and display raw spot detection points."""

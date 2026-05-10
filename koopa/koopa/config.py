@@ -7,7 +7,7 @@ import datetime
 import os
 import textwrap
 
-__version__ = "0.0.23"
+__version__ = "0.0.24"
 
 
 @dataclass
@@ -364,6 +364,17 @@ segmentation_other = {
         default=[],
         dtype=List[Union[str, None]],
     ),
+    "sego_dilations": ConfigItem(
+        description=(
+            "Per-channel pixel radii for dilated proximity analysis. "
+            "Each entry is a list of dilation radii applied to the corresponding "
+            "sego_channel. Format: [[5, 10, 20], []] = first channel gets dilations "
+            "5/10/20 px, second channel unchanged. Include 0 in a list to also keep "
+            "the original undilated mask. Empty list disables dilation for that channel."
+        ),
+        default=[],
+        dtype=list,
+    ),
 }
 
 fly_brain_cells = {
@@ -539,6 +550,26 @@ def __validate_sego(config: configparser.ConfigParser) -> None:
         raise ValueError(
             "All channels for segmentation must have one and only one method associated."
         )
+
+    sego_dilations_raw = config["SegmentationOther"].get("sego_dilations", "[]")
+    sego_dilations = eval(sego_dilations_raw) if sego_dilations_raw else []
+    if sego_dilations:
+        if not isinstance(sego_dilations, list) or not all(
+            isinstance(entry, list) for entry in sego_dilations
+        ):
+            raise ValueError(
+                "sego_dilations must be a list of lists, e.g. [[5, 10], []]."
+            )
+        if len(sego_dilations) != len(sego_channels):
+            raise ValueError(
+                f"sego_dilations has {len(sego_dilations)} entries but sego_channels "
+                f"has {len(sego_channels)} — must match 1:1."
+            )
+        for idx, entry in enumerate(sego_dilations):
+            if not all(isinstance(r, int) and r >= 0 for r in entry):
+                raise ValueError(
+                    f"sego_dilations[{idx}] must contain non-negative integers."
+                )
 
 
 def validate_config(config: configparser.ConfigParser) -> None:
