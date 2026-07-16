@@ -366,11 +366,13 @@ segmentation_other = {
     ),
     "sego_dilations": ConfigItem(
         description=(
-            "Per-channel pixel radii for dilated proximity analysis. "
-            "Each entry is a list of dilation radii applied to the corresponding "
-            "sego_channel. Format: [[5, 10, 20], []] = first channel gets dilations "
-            "5/10/20 px, second channel unchanged. Include 0 in a list to also keep "
-            "the original undilated mask. Empty list disables dilation for that channel."
+            "Per-channel pixel radii for proximity analysis. "
+            "Each entry is a list of radii applied to the corresponding "
+            "sego_channel. Positive values dilate the mask, negative values erode "
+            "it (by abs(radius) px). Format: [[5, 10, -5], []] = first channel gets "
+            "dilations 5/10 px and an erosion of 5 px, second channel unchanged. "
+            "Include 0 in a list to also keep the original mask. Empty list disables "
+            "processing for that channel."
         ),
         default=[],
         dtype=list,
@@ -566,9 +568,10 @@ def __validate_sego(config: configparser.ConfigParser) -> None:
                 f"has {len(sego_channels)} — must match 1:1."
             )
         for idx, entry in enumerate(sego_dilations):
-            if not all(isinstance(r, int) and r >= 0 for r in entry):
+            if not all(isinstance(r, int) for r in entry):
                 raise ValueError(
-                    f"sego_dilations[{idx}] must contain non-negative integers."
+                    f"sego_dilations[{idx}] must contain integers "
+                    "(positive to dilate, negative to erode, 0 to keep original)."
                 )
 
 

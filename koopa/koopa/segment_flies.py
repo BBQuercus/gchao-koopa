@@ -81,9 +81,18 @@ def remove_false_objects(
 
 
 def dilate_segmap(segmap: np.ndarray, dilation: int) -> np.ndarray:
-    """Segment nuclei with cellpose."""
+    """Grow (or shrink) a segmentation map by a pixel radius.
+
+    Positive `dilation` dilates the mask, negative erodes it by abs(dilation)
+    iterations, and 0 leaves it unchanged.
+    """
     structure = skimage.morphology.ball(4)
-    mask = ndi.binary_dilation(segmap, structure, iterations=dilation)
+    if dilation > 0:
+        mask = ndi.binary_dilation(segmap, structure, iterations=dilation)
+    elif dilation < 0:
+        mask = ndi.binary_erosion(segmap, structure, iterations=-dilation)
+    else:
+        mask = segmap.astype(bool)
     mask = ndi.binary_fill_holes(mask)
     dilated = skimage.segmentation.watershed(mask, markers=segmap, mask=mask)
     return dilated
